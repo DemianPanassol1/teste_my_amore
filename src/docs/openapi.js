@@ -65,6 +65,7 @@ const swaggerDocument = {
           email: { type: "string", example: "ana@example.com" },
           createdAt: { type: "string", example: "2026-06-08 12:00:00" },
           updatedAt: { type: "string", example: "2026-06-08 12:00:00" },
+          mutualFriendsCount: { type: "integer", example: 2 },
         },
       },
       Friendship: {
@@ -76,6 +77,7 @@ const swaggerDocument = {
           status: { type: "string", enum: ["pending", "accepted", "rejected"], example: "pending" },
           createdAt: { type: "string", example: "2026-06-08 12:00:00" },
           updatedAt: { type: "string", example: "2026-06-08 12:00:00" },
+          mutualFriendsCount: { type: "integer", example: 2 },
         },
       },
       Post: {
@@ -134,7 +136,28 @@ const swaggerDocument = {
         type: "object",
         required: ["content"],
         properties: {
-          content: { type: "string", example: "Texto do post ou comentario." },
+          content: { type: "string", minLength: 1, maxLength: 500, example: "Texto do post ou comentario." },
+        },
+      },
+      UpdateProfileBody: {
+        type: "object",
+        properties: {
+          name: { type: "string", example: "Marina Costa" },
+          email: { type: "string", example: "marina.costa@example.com" },
+        },
+      },
+      ProfileData: {
+        type: "object",
+        properties: {
+          user: { $ref: "#/components/schemas/User" },
+          stats: {
+            type: "object",
+            properties: {
+              postsCount: { type: "integer", example: 1 },
+              friendsCount: { type: "integer", example: 2 },
+              commentsCount: { type: "integer", example: 0 },
+            },
+          },
         },
       },
     },
@@ -246,10 +269,79 @@ const swaggerDocument = {
       get: {
         tags: ["Users"],
         summary: "Lista usuarios",
-        description: "Lista usuarios cadastrados, exceto o proprio usuario, incluindo o relacionamento de amizade quando existir.",
+        description: "Lista usuarios cadastrados, exceto o proprio usuario, incluindo relacionamento de amizade e amigos em comum. Aceita busca opcional por nome ou email.",
         security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: "search",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+            description: "Busca parcial por nome ou email.",
+            example: "marina",
+          },
+        ],
         responses: {
           200: { description: "Lista de usuarios.", content: { "application/json": { schema: { $ref: "#/components/schemas/SuccessResponse" } } } },
+          401: { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/users/me": {
+      put: {
+        tags: ["Users"],
+        summary: "Atualiza perfil do usuario logado",
+        description: "Permite atualizar name e email do proprio usuario. Nao altera senha.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/UpdateProfileBody" } } },
+        },
+        responses: {
+          200: {
+            description: "Perfil atualizado.",
+            content: {
+              "application/json": {
+                example: {
+                  success: true,
+                  data: {
+                    id: 1,
+                    name: "Marina Costa",
+                    email: "marina.costa@example.com",
+                    createdAt: "2026-06-08 12:00:00",
+                    updatedAt: "2026-06-08 12:10:00",
+                  },
+                },
+              },
+            },
+          },
+          400: { $ref: "#/components/responses/ValidationError" },
+          401: { $ref: "#/components/responses/Unauthorized" },
+          409: { $ref: "#/components/responses/Conflict" },
+        },
+      },
+    },
+    "/users/me/profile": {
+      get: {
+        tags: ["Users"],
+        summary: "Retorna perfil agregado do usuario logado",
+        description: "Retorna dados publicos do usuario e estatisticas de posts, amigos e comentarios feitos pelo usuario.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: "Perfil agregado.",
+            content: {
+              "application/json": {
+                example: {
+                  success: true,
+                  data: {
+                    user: { id: 1, name: "Marina Costa", email: "marina.costa@example.com", createdAt: "2026-06-08 12:00:00", updatedAt: "2026-06-08 12:00:00" },
+                    stats: { postsCount: 1, friendsCount: 2, commentsCount: 0 },
+                  },
+                },
+              },
+            },
+          },
           401: { $ref: "#/components/responses/Unauthorized" },
         },
       },
@@ -286,6 +378,7 @@ const swaggerDocument = {
       get: {
         tags: ["Friendships"],
         summary: "Lista solicitacoes recebidas pendentes",
+        description: "Cada solicitacao inclui mutualFriendsCount calculado entre o usuario logado e o solicitante.",
         security: [{ bearerAuth: [] }],
         responses: {
           200: { description: "Solicitacoes recebidas.", content: { "application/json": { schema: { $ref: "#/components/schemas/SuccessResponse" } } } },
@@ -297,6 +390,7 @@ const swaggerDocument = {
       get: {
         tags: ["Friendships"],
         summary: "Lista solicitacoes enviadas pendentes",
+        description: "Cada solicitacao inclui mutualFriendsCount calculado entre o usuario logado e o destinatario.",
         security: [{ bearerAuth: [] }],
         responses: {
           200: { description: "Solicitacoes enviadas.", content: { "application/json": { schema: { $ref: "#/components/schemas/SuccessResponse" } } } },
@@ -338,10 +432,34 @@ const swaggerDocument = {
       get: {
         tags: ["Friendships"],
         summary: "Lista amigos aceitos",
+        description: "Lista amigos aceitos com mutualFriendsCount quando aplicavel.",
         security: [{ bearerAuth: [] }],
         responses: {
           200: { description: "Lista de amigos.", content: { "application/json": { schema: { $ref: "#/components/schemas/SuccessResponse" } } } },
           401: { $ref: "#/components/responses/Unauthorized" },
+        },
+      },
+    },
+    "/friendships/{id}": {
+      delete: {
+        tags: ["Friendships"],
+        summary: "Remove amizade aceita",
+        description: "Apenas usuarios envolvidos podem remover uma amizade com status accepted.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+        responses: {
+          200: {
+            description: "Amizade removida.",
+            content: {
+              "application/json": {
+                example: { success: true, data: { deleted: true } },
+              },
+            },
+          },
+          401: { $ref: "#/components/responses/Unauthorized" },
+          403: { $ref: "#/components/responses/Forbidden" },
+          404: { $ref: "#/components/responses/NotFound" },
+          409: { $ref: "#/components/responses/Conflict" },
         },
       },
     },
@@ -392,6 +510,7 @@ const swaggerDocument = {
       put: {
         tags: ["Posts"],
         summary: "Atualiza post proprio",
+        description: "Conteudo deve ter de 1 a 500 caracteres.",
         security: [{ bearerAuth: [] }],
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
         requestBody: {

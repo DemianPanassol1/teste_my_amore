@@ -46,7 +46,41 @@ function findByIdWithPassword(id) {
   return mapUserWithPassword(row);
 }
 
-function listExcept(currentUserId) {
+function update(id, data) {
+  const fields = [];
+  const params = [];
+
+  if (data.name !== undefined) {
+    fields.push("name = ?");
+    params.push(data.name);
+  }
+
+  if (data.email !== undefined) {
+    fields.push("email = ?");
+    params.push(data.email);
+  }
+
+  if (!fields.length) return findById(id);
+
+  db.prepare(`
+    UPDATE users
+    SET ${fields.join(", ")}, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(...params, id);
+
+  return findById(id);
+}
+
+function listExcept(currentUserId, search) {
+  const params = [currentUserId, currentUserId, currentUserId];
+  let searchClause = "";
+
+  if (search) {
+    searchClause = "AND (LOWER(u.name) LIKE ? OR LOWER(u.email) LIKE ?)";
+    const searchTerm = `%${search.toLowerCase()}%`;
+    params.push(searchTerm, searchTerm);
+  }
+
   const rows = db
     .prepare(`
       SELECT
@@ -62,9 +96,10 @@ function listExcept(currentUserId) {
           OR (f.requester_id = u.id AND f.addressee_id = ?)
         )
       WHERE u.id <> ?
+        ${searchClause}
       ORDER BY u.name ASC
     `)
-    .all(currentUserId, currentUserId, currentUserId);
+    .all(...params);
 
   return rows.map((row) => ({
     ...mapUser(row),
@@ -79,11 +114,38 @@ function listExcept(currentUserId) {
   }));
 }
 
+function countProfileStats(userId) {
+  const postsCount = db
+    .prepare("SELECT COUNT(*) AS count FROM posts WHERE author_id = ?")
+    .get(userId).count;
+
+  const friendsCount = db
+    .prepare(`
+      SELECT COUNT(*) AS count
+      FROM friendships
+      WHERE (requester_id = ? OR addressee_id = ?)
+        AND status = 'accepted'
+    `)
+    .get(userId, userId).count;
+
+  const commentsCount = db
+    .prepare("SELECT COUNT(*) AS count FROM comments WHERE author_id = ?")
+    .get(userId).count;
+
+  return {
+    postsCount,
+    friendsCount,
+    commentsCount,
+  };
+}
+
 module.exports = {
   create,
   findByEmail,
   findById,
   findByIdWithPassword,
+  update,
   listExcept,
+  countProfileStats,
   mapUser,
 };

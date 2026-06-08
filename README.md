@@ -129,11 +129,15 @@ Authorization: Bearer TOKEN
 - Usuario nao pode enviar amizade para si mesmo.
 - Nao existe amizade duplicada entre o mesmo par de usuarios.
 - Apenas o destinatario aceita ou recusa uma solicitacao.
+- Apenas usuarios envolvidos podem remover uma amizade aceita.
 - Feed mostra posts proprios e de amigos aceitos.
 - Usuario so ve posts de outro usuario se forem amigos.
 - Usuario so comenta em post proprio ou de amigo.
 - Apenas autores editam/excluem seus posts.
 - Apenas autores excluem seus comentarios.
+- Posts aceitam de 1 a 500 caracteres.
+- `GET /users` aceita `search` por nome ou email e retorna `mutualFriendsCount`.
+- `GET /users/me/profile` retorna totais de posts, amigos e comentarios feitos pelo usuario.
 
 ## Endpoints
 
@@ -146,6 +150,8 @@ Authorization: Bearer TOKEN
 ### Users
 
 - `GET /users`
+- `PUT /users/me`
+- `GET /users/me/profile`
 - `GET /users/:id`
 
 ### Friendships
@@ -155,6 +161,7 @@ Authorization: Bearer TOKEN
 - `GET /friendships/sent`
 - `POST /friendships/:id/accept`
 - `POST /friendships/:id/reject`
+- `DELETE /friendships/:id`
 - `GET /friendships/friends`
 
 ### Posts

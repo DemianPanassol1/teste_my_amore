@@ -1,7 +1,7 @@
 const { z } = require("zod");
 
 const idParam = z.coerce.number().int().positive();
-const content = z.string().trim().min(1, "Conteudo e obrigatorio.").max(1000, "Conteudo deve ter no maximo 1000 caracteres.");
+const content = z.string().trim().min(1, "Conteudo e obrigatorio.").max(500, "Conteudo deve ter no maximo 500 caracteres.");
 
 const createPostSchema = z.object({
   body: z.object({

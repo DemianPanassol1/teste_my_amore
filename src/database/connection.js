@@ -34,6 +34,43 @@ function mapEmptyRowToUndefined(row) {
   return row && Object.keys(row).length > 0 ? row : undefined;
 }
 
+function migratePostContentLimit() {
+  const result = db.exec(`
+    SELECT sql
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'posts'
+  `);
+  const createSql = result[0]?.values?.[0]?.[0] || "";
+
+  if (!createSql.includes("1000")) return;
+
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+
+    BEGIN TRANSACTION;
+
+    CREATE TABLE posts_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      author_id INTEGER NOT NULL,
+      content TEXT NOT NULL CHECK (length(content) BETWEEN 1 AND 500),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    INSERT INTO posts_new (id, author_id, content, created_at, updated_at)
+    SELECT id, author_id, substr(content, 1, 500), created_at, updated_at
+    FROM posts;
+
+    DROP TABLE posts;
+    ALTER TABLE posts_new RENAME TO posts;
+
+    COMMIT;
+
+    PRAGMA foreign_keys = ON;
+  `);
+}
+
 async function initializeDatabase() {
   if (initialized) return;
 
@@ -52,6 +89,8 @@ async function initializeDatabase() {
   if (fs.existsSync(schemaFile)) {
     db.exec(fs.readFileSync(schemaFile, "utf8"));
   }
+
+  migratePostContentLimit();
 
   persistDatabase();
   initialized = true;

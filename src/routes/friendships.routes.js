@@ -16,6 +16,7 @@ router.get("/requests", friendshipsController.received);
 router.get("/sent", friendshipsController.sent);
 router.post("/:id/accept", validate(friendshipActionSchema), friendshipsController.accept);
 router.post("/:id/reject", validate(friendshipActionSchema), friendshipsController.reject);
+router.delete("/:id", validate(friendshipActionSchema), friendshipsController.remove);
 router.get("/friends", friendshipsController.friends);
 
 module.exports = router;

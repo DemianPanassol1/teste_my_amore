@@ -41,6 +41,14 @@ function friends(req, res) {
   return sendSuccess(res, friendshipsService.listFriends(req.user.id));
 }
 
+function remove(req, res, next) {
+  try {
+    return sendSuccess(res, friendshipsService.removeFriendship(req.params.id, req.user.id));
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   request,
   received,
@@ -48,4 +56,5 @@ module.exports = {
   accept,
   reject,
   friends,
+  remove,
 };

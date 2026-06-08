@@ -53,9 +53,45 @@ function updateStatus(id, status) {
   return findById(id);
 }
 
+function remove(id) {
+  db.prepare("DELETE FROM friendships WHERE id = ?").run(id);
+}
+
 function areFriends(userAId, userBId) {
   const friendship = findBetween(userAId, userBId);
   return Boolean(friendship && friendship.status === "accepted");
+}
+
+function countMutualFriends(userAId, userBId) {
+  const row = db
+    .prepare(`
+      WITH friends_a AS (
+        SELECT CASE
+          WHEN requester_id = ? THEN addressee_id
+          ELSE requester_id
+        END AS friend_id
+        FROM friendships
+        WHERE (requester_id = ? OR addressee_id = ?)
+          AND status = 'accepted'
+      ),
+      friends_b AS (
+        SELECT CASE
+          WHEN requester_id = ? THEN addressee_id
+          ELSE requester_id
+        END AS friend_id
+        FROM friendships
+        WHERE (requester_id = ? OR addressee_id = ?)
+          AND status = 'accepted'
+      )
+      SELECT COUNT(*) AS count
+      FROM friends_a
+      JOIN friends_b ON friends_a.friend_id = friends_b.friend_id
+      WHERE friends_a.friend_id <> ?
+        AND friends_a.friend_id <> ?
+    `)
+    .get(userAId, userAId, userAId, userBId, userBId, userBId, userAId, userBId);
+
+  return row.count;
 }
 
 function listReceivedPending(userId) {
@@ -71,6 +107,7 @@ function listReceivedPending(userId) {
 
   return rows.map((row) => ({
     ...mapFriendship(row),
+    mutualFriendsCount: countMutualFriends(userId, row.user_id),
     requester: mapUser({
       id: row.user_id,
       name: row.name,
@@ -94,6 +131,7 @@ function listSentPending(userId) {
 
   return rows.map((row) => ({
     ...mapFriendship(row),
+    mutualFriendsCount: countMutualFriends(userId, row.user_id),
     addressee: mapUser({
       id: row.user_id,
       name: row.name,
@@ -121,7 +159,10 @@ function listFriends(userId) {
     `)
     .all(userId, userId, userId);
 
-  return rows.map(mapUser);
+  return rows.map((row) => ({
+    ...mapUser(row),
+    mutualFriendsCount: countMutualFriends(userId, row.id),
+  }));
 }
 
 module.exports = {
@@ -129,7 +170,9 @@ module.exports = {
   findById,
   findBetween,
   updateStatus,
+  remove,
   areFriends,
+  countMutualFriends,
   listReceivedPending,
   listSentPending,
   listFriends,
